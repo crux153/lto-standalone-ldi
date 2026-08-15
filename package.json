@@ -1,0 +1,54 @@
+{
+  "name": "lto-standalone-ldi",
+  "version": "1.0.0",
+  "description": "Configure IBM LTO tape drives for standalone (automatic drive online) operation over the RS-422 Library/Drive Interface (LDI)",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "bin": {
+    "lto-ldi": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "tsx src/cli.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "lto",
+    "ultrium",
+    "ibm",
+    "tape",
+    "ldi",
+    "rs-422",
+    "rs422",
+    "serialport",
+    "set-config",
+    "standalone"
+  ],
+  "dependencies": {
+    "serialport": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
