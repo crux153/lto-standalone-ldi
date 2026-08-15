@@ -203,6 +203,23 @@ describe('PacketDecoder', () => {
     expect(events.filter((event) => event.kind === 'discarded')).toHaveLength(1);
   });
 
+  it('recovers the good packet when a partial one is prepended to it', () => {
+    // The spec describes this case ending in a NAK, because an implementation
+    // that delineates purely by ETX reads the stale L1/L2 as the packet's own.
+    // Framing on STX instead - which the spec's primary rule allows, since all
+    // characters preceding an STX are ignored - lets the intact packet through,
+    // so the sender gets its ACK rather than being made to retransmit.
+    const decoder = new PacketDecoder();
+    const events = decoder.push(
+      Buffer.concat([Buffer.from([ControlCharacter.STX, 0x01, 0xff, 0xab]), encodePacket(message)]),
+    );
+
+    const packets = events.filter((event) => event.kind === 'packet');
+    expect(packets).toHaveLength(1);
+    expect((packets[0] as { message: Buffer }).message.equals(Buffer.from(message))).toBe(true);
+    expect(events.filter((event) => event.kind === 'error')).toHaveLength(0);
+  });
+
   it('surfaces an invalid packet as an error event rather than throwing', () => {
     const decoder = new PacketDecoder();
     const packet = Buffer.from(encodePacket(message));

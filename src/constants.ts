@@ -158,7 +158,20 @@ export const Timing = {
   SNAK_RETRY_DELAY_MS: 10_000,
   /** Number of resends attempted after a SNAK. */
   SNAK_RETRIES: 10,
-  /** Suggested receive timeout for packet completion; must be below SEND_TIMEOUT_MS. */
+  /**
+   * The spec's suggested receive timeout for packet completion, measured from
+   * the first character of a packet.
+   *
+   * Note that the spec contradicts itself here: it offers 10 seconds as "a
+   * possible timeout value" while also stating that the receive timeout should
+   * be less than the send timeout, which is 5 seconds. The value below is the
+   * one the spec names outright; a receiver that enforces a timeout should pick
+   * something under {@link SEND_TIMEOUT_MS} instead.
+   *
+   * Nothing in this library enforces a receive timeout. The IBM drive does not
+   * implement one either: it returns no response to a partial packet until a
+   * later ETX arrives, at which point the length mismatch produces a NAK.
+   */
   RECEIVE_TIMEOUT_MS: 10_000,
   /**
    * A drive in non-polled mode issues its Config_Request within ten seconds of

@@ -265,7 +265,20 @@ export class PacketDecoder {
             this.state = State.Idle;
             events.push(decodePacketBody(body, raw));
           } else if (byte === ControlCharacter.STX) {
-            // A fresh STX inside a packet means the previous one was partial.
+            // A fresh STX inside a packet means the previous one was partial:
+            // stuffing guarantees a real 0x02 can only be an STX. Resynchronise
+            // on it and keep the new packet, following the spec's rule that all
+            // characters preceding an STX are ignored.
+            //
+            // The spec also notes that a partial packet prepended to a full one
+            // "will result in a NAK ... due to an apparent mismatch of the L1,
+            // L2 length indication with the total (combined) message length".
+            // That outcome belongs to the other framing strategy the spec
+            // permits, where packets are delineated by searching for ETX alone
+            // and the stale header is therefore read as the packet's own.
+            // Resynchronising is the more forgiving of the two: the sender gets
+            // an ACK for a packet that did arrive intact instead of being made
+            // to retransmit it.
             this.discarded.push(ControlCharacter.STX, ...this.buffer);
             this.flushDiscarded(events);
             this.buffer = [];

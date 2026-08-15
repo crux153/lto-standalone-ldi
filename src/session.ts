@@ -105,6 +105,9 @@ export class LdiSession extends EventEmitter<LdiSessionEvents> {
   /** Resolver for the ACK/NAK/SNAK the current in-flight packet is waiting on. */
   private pendingResponse: ((kind: ResponseKind) => void) | null = null;
 
+  /** Serialises {@link sendPacket} so only one packet is ever in flight. */
+  private sendQueue: Promise<void> = Promise.resolve();
+
   /**
    * When set, incoming bytes bypass the packet decoder and are handed to this
    * collector instead. Used for the Drive Type primitive, which is exchanged
@@ -167,8 +170,27 @@ export class LdiSession extends EventEmitter<LdiSessionEvents> {
    * Sends a pre-encoded packet and waits for it to be acknowledged.
    *
    * Useful for replaying a captured packet byte for byte.
+   *
+   * Concurrent calls are queued rather than interleaved: the spec forbids
+   * sending a second packet before the previous one has been answered or has
+   * timed out, and only one ACK/NAK/SNAK can be outstanding at a time.
    */
   async sendPacket(packet: Uint8Array): Promise<void> {
+    // Chain onto whatever is already in flight, and keep the chain alive
+    // regardless of whether this send succeeds.
+    const send = this.sendQueue.then(
+      () => this.transmit(packet),
+      () => this.transmit(packet),
+    );
+    this.sendQueue = send.then(
+      () => undefined,
+      () => undefined,
+    );
+    return send;
+  }
+
+  /** Transmits one packet, retrying per the spec's sending rules. */
+  private async transmit(packet: Uint8Array): Promise<void> {
     let plainRetriesLeft = this.options.retries;
     let snakRetriesLeft = this.options.snakRetries;
     let attempts = 0;
@@ -322,6 +344,10 @@ export class LdiSession extends EventEmitter<LdiSessionEvents> {
       case 'packet': {
         // Only the checksum and message length are validated before an ACK is
         // sent, never the message contents, so acknowledge before decoding.
+        //
+        // Queueing the write here cannot cut into a packet that is mid-transmit
+        // because stream writes are delivered in call order; the ACK simply
+        // follows it, which is what the spec's deadlock-avoidance note asks for.
         if (this.options.autoAcknowledge) {
           void this.write(ACK_RESPONSE).catch(this.onError);
         }

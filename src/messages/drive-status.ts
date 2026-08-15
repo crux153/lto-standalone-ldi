@@ -152,11 +152,13 @@ const BLINK_RATE: Record<number, string> = {
 
 /** Tape cartridge types (byte 31, bits 3..0). */
 const CARTRIDGE_TYPE: Record<number, string> = {
-  0b0000: 'No tape present or cartridge not mounted successfully',
-  0b0001: 'Standard LTO Generation 1 format',
+  0b0000: 'No tape present, or cartridge not mounted successfully',
+  0b0001: 'Standard LTO Generation 1 format (per U18 spec.)',
   0b0010: 'Cleaner cartridge',
-  0b0011: 'Drive FMR tape created via the Maintenance Panel',
-  0b0100: 'Drive FMR tape created via Maint Command Create Drive FMR Cartridge',
+  0b0011: 'Drive FMR (firmware update) tape created via the Maintenance Panel',
+  0b0100:
+    'Drive FMR (firmware update) tape created via the Maint_Command Create Drive FMR Cartridge (0x61)',
+  // 0b0101 is reserved, as are 0b1000..0b1111.
   0b0110: 'Invalid cleaner cartridge',
   0b0111: 'Invalid cartridge type',
 };

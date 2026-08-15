@@ -43,8 +43,10 @@ class FakeStream extends EventEmitter implements LdiStream {
  * wait on the observable effect rather than guessing how many ticks that takes.
  */
 async function untilWritten(stream: FakeStream, count: number): Promise<void> {
-  for (let tick = 0; tick < 100 && stream.written.length < count; tick++) {
-    await new Promise((resolve) => setImmediate(resolve));
+  // Draining microtasks rather than sleeping keeps this usable under vitest's
+  // fake timers, which replace setImmediate but leave the microtask queue alone.
+  for (let tick = 0; tick < 200 && stream.written.length < count; tick++) {
+    await Promise.resolve();
   }
   expect(stream.written.length).toBeGreaterThanOrEqual(count);
 }
@@ -118,7 +120,7 @@ describe('LdiSession.sendPacket', () => {
     const session = new LdiSession(stream);
 
     const sent = session.sendPacket(REFERENCE_SET_CONFIG_PACKET);
-    await Promise.resolve();
+    await untilWritten(stream, 1);
     stream.receive(ACK_RESPONSE);
 
     await expect(sent).resolves.toBeUndefined();
@@ -161,6 +163,59 @@ describe('LdiSession.sendPacket', () => {
     session.close();
   });
 
+  it('queues concurrent sends instead of interleaving them', async () => {
+    // The spec forbids sending a second packet before the previous one has been
+    // answered, and only one ACK can be outstanding at a time.
+    const stream = new FakeStream();
+    const session = new LdiSession(stream);
+    const first = encodePacket(buildConfigRequest(Uint8Array.from([1, 0, 0, 1])));
+    const second = encodePacket(buildConfigRequest(Uint8Array.from([1, 0, 0, 2])));
+
+    const sentFirst = session.sendPacket(first);
+    const sentSecond = session.sendPacket(second);
+
+    await untilWritten(stream, 1);
+    // The second packet is still waiting its turn.
+    expect(stream.written).toHaveLength(1);
+    expect(stream.written[0]!.equals(first)).toBe(true);
+
+    stream.receive(ACK_RESPONSE);
+    await sentFirst;
+
+    await untilWritten(stream, 2);
+    expect(stream.written[1]!.equals(second)).toBe(true);
+    stream.receive(ACK_RESPONSE);
+    await sentSecond;
+
+    session.close();
+  });
+
+  it('still sends a queued packet after the one ahead of it fails', async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = new FakeStream();
+      const session = new LdiSession(stream, { sendTimeoutMs: 1_000, retries: 0 });
+      const second = encodePacket(buildConfigRequest(Uint8Array.from([1, 0, 0, 2])));
+
+      const failing = session.sendPacket(REFERENCE_SET_CONFIG_PACKET);
+      const queued = session.sendPacket(second);
+      const failure = expect(failing).rejects.toThrow(LdiSendError);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await failure;
+
+      // The queue moved on rather than deadlocking behind the failed send.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(stream.written).toHaveLength(2);
+      stream.receive(ACK_RESPONSE);
+      await expect(queued).resolves.toBeUndefined();
+
+      session.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('waits before retrying after a SNAK', async () => {
     vi.useFakeTimers();
     try {
@@ -168,7 +223,7 @@ describe('LdiSession.sendPacket', () => {
       const session = new LdiSession(stream, { snakRetryDelayMs: 10_000 });
 
       const sent = session.sendPacket(REFERENCE_SET_CONFIG_PACKET);
-      await Promise.resolve();
+      await untilWritten(stream, 1);
       stream.receive(SNAK_RESPONSE);
       await Promise.resolve();
 
@@ -310,7 +365,7 @@ describe('drive-initiated handshake', () => {
 
     // The library answers with a Set_Config echoing those four bytes.
     const sent = session.sendMessage(buildSetConfigResponse(request, { tgtAddr: 0x02 }));
-    await Promise.resolve();
+    await untilWritten(stream, 2);
     stream.receive(ACK_RESPONSE);
     await sent;
 

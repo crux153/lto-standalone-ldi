@@ -104,7 +104,9 @@ describe('parseDriveStatus', () => {
     // POST complete is what tells a library the drive is ready in polled mode.
     const ready = parseDriveStatus(driveStatus({ 31: 0b0000_0001 }));
     expect(ready.flags3.postProcessing).toBe(false);
-    expect(ready.flags3.cartridgeTypeDescription).toBe('Standard LTO Generation 1 format');
+    expect(ready.flags3.cartridgeTypeDescription).toBe(
+      'Standard LTO Generation 1 format (per U18 spec.)',
+    );
   });
 
   it('rejects a message that is not a Drive_Status', () => {

@@ -12,7 +12,9 @@ cleared**, after which the drive raises its data port by itself on every
 power-up.
 
 Protocol reference: [IBM Library/Drive Interface Specification, Revision 4,
-January 8 2002 (T10/02-022r0)](https://www.t10.org/ftp/t10/document.02/02-022r0.pdf).
+January 8 2002 (T10/02-022r0)](https://www.t10.org/ftp/t10/document.02/02-022r0.pdf),
+reorganized as an implementation reference in
+[`docs/ibm-library-drive-interface.md`](docs/ibm-library-drive-interface.md).
 
 ## What it does
 
