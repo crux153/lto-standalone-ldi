@@ -53,7 +53,8 @@ Set_Config options (standalone, set-config, build)
 Other options
       --timeout <ms>         How long to wait for the drive. Default ${Timing.CONFIG_REQUEST_WINDOW_MS} for standalone.
       --async                standalone only: send the Set_Config immediately instead of waiting
-                             for a Config_Request (the library-initiated handshake).
+                             for a Config_Request (the library-initiated handshake). With no other
+                             options this sends the published reference packet byte for byte.
       --reference            build only: print the published reference packet for comparison.
   -h, --help                 Show this help.
 

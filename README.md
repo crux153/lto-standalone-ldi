@@ -119,6 +119,30 @@ Drive acknowledged the Set_Config (ACK).
 The drive resets itself after bit 3 changes — the spec allows up to a minute —
 and comes back with its SCSI or Fibre Channel port online.
 
+### How this compares to the packet the write-ups publish
+
+Both write-ups send their packet blind, without waiting for the drive to ask.
+That is what `--async` does, and with no other options it puts exactly those 60
+bytes on the wire:
+
+```
+02 00 36 AC 01 00 00 00 01 FF F2 00 ...(47 zero bytes)... E6 03
+```
+
+The default `standalone` waits for the `Config_Request` first, so its packet
+differs in **three wire bytes** — and it has to. The spec requires the reply to
+echo the request's four Msg ID bytes, and those bytes are chosen by the drive:
+
+| Wire offset | Field | Reference | Answering a request |
+| ----------- | ----- | --------- | ------------------- |
+| 5, 8 | Msg ID (echoed from the `Config_Request`) | `00 00 00 01` | whatever the drive sent |
+| 58 | BCC (follows from the Msg ID) | `E6` | recomputed |
+
+Everything else is identical, including Configuration Flags byte 53 = `0x00`
+with bit 3 clear. Use `--async` if you want the published packet verbatim;
+otherwise the default is the more correct of the two, because a drive that just
+asked for its configuration gets an answer it can match to its request.
+
 Other commands:
 
 ```bash
