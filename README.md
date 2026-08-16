@@ -266,8 +266,22 @@ checksum, acknowledgement or byte stuffing. The drive replies with nine bytes:
 | ------- | ----- |
 | 0       | `0xFA` |
 | 1–3     | `0x49 0x42 0x4D` — ASCII `IBM` |
-| 4       | `0x80` |
+| 4       | `0x80` per the spec; the LTO generation as an ASCII digit on later drives |
 | 5–8     | Firmware revision, MSB first |
+
+Byte 4 is worth a note. The spec was written in 2002, when Ultrium 1 was the
+only generation, and fixes it at `0x80`. Drives since then report their
+generation there instead, so an LTO-7 half-height drive answers:
+
+```
+FA 49 42 4D 37 4D 35 37 31
+   I  B  M  7  M  5  7  1
+```
+
+`0x37` is ASCII `7`, and the tail reads as `IBM` + `7` + firmware `M571` —
+which lines up with IBM's release notes pairing M570 with LTO-7 full-height and
+M571 with LTO-7 half-height. Identification therefore rests on byte 0 and the
+vendor field alone; byte 4 is reported, not enforced.
 
 ## Tests
 
