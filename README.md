@@ -97,8 +97,10 @@ npx lto-ldi standalone --port /dev/ttyUSB0
 ```
 
 ```
-Waiting up to 10000 ms for a Config_Request.
-Power-cycle the drive now if it is already running.
+Waiting up to 5 minutes for a Config_Request.
+Power-cycle the drive now. It only asks for its configuration once per
+reset, and it runs its power-on self test first, so expect a minute or
+more of silence before anything arrives.
 
 Config_Request (Drive-to-Library, Type=0xAB, Subtype=0x01)
   Raw                : AB FF 03 00 00 2A 01

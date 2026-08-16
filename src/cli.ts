@@ -51,7 +51,8 @@ Set_Config options (standalone, set-config, build)
       --msg-id <hex>         Four Msg ID bytes, e.g. 00000001. Ignored when answering a Config_Request.
 
 Other options
-      --timeout <ms>         How long to wait for the drive. Default ${Timing.CONFIG_REQUEST_WINDOW_MS} for standalone.
+      --timeout <ms>         How long to wait for the drive. Default ${formatDuration(Timing.CONFIG_REQUEST_WAIT_MS)}
+                             for standalone, which allows for the drive's power-on self test.
       --async                standalone only: send the Set_Config immediately instead of waiting
                              for a Config_Request (the library-initiated handshake). With no other
                              options this sends the published reference packet byte for byte.
@@ -334,7 +335,7 @@ async function monitor(values: Values): Promise<number> {
 async function standalone(values: Values): Promise<number> {
   const { stream, close } = await openPort(values);
   const session = new LdiSession(stream);
-  const timeout = integerOption(values.timeout, 'timeout', 1, 600_000) ?? Timing.CONFIG_REQUEST_WINDOW_MS;
+  const timeout = integerOption(values.timeout, 'timeout', 1, 3_600_000) ?? Timing.CONFIG_REQUEST_WAIT_MS;
   const options = setConfigOptionsFrom(values);
 
   session.on('discarded', (bytes) => {
@@ -350,8 +351,10 @@ async function standalone(values: Values): Promise<number> {
       message = buildSetConfig(options);
     } else {
       process.stdout.write(
-        `Waiting up to ${timeout} ms for a Config_Request.\n` +
-          'Power-cycle the drive now if it is already running.\n\n',
+        `Waiting up to ${formatDuration(timeout)} for a Config_Request.\n` +
+          'Power-cycle the drive now. It only asks for its configuration once per\n' +
+          "reset, and it runs its power-on self test first, so expect a minute or\n" +
+          'more of silence before anything arrives.\n\n',
       );
       const request = await session.waitForConfigRequest(timeout);
       process.stdout.write(`${formatConfigRequest(request)}\n\n`);
@@ -452,6 +455,18 @@ function integerOption(
 
 function formatHexBytes(bytes: Uint8Array): string {
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
+
+/** Renders a millisecond duration the way a person would say it. */
+function formatDuration(ms: number): string {
+  if (ms >= 60_000 && ms % 60_000 === 0) {
+    const minutes = ms / 60_000;
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  if (ms >= 1_000 && ms % 1_000 === 0) {
+    return `${ms / 1_000} s`;
+  }
+  return `${ms} ms`;
 }
 
 /** A problem with the command line rather than with the drive. */

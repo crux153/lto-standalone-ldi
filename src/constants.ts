@@ -189,6 +189,20 @@ export const Timing = {
   /**
    * A drive in non-polled mode issues its Config_Request within ten seconds of
    * power-up or reset (spec, "Config_Request").
+   *
+   * This is the spec's window, measured from the moment the drive powers up.
+   * It is not how long a listener should wait - see {@link CONFIG_REQUEST_WAIT_MS}.
    */
   CONFIG_REQUEST_WINDOW_MS: 10_000,
+  /**
+   * How long to wait for a Config_Request in practice.
+   *
+   * The ten-second window above starts when the drive powers up, and a listener
+   * is almost always running before that: you start listening, then switch the
+   * drive on. Everything the drive does before it reaches that window counts
+   * against the wait - power-on self test above all, which on current drives
+   * runs well past a minute. Five minutes leaves room for that and for the
+   * operator walking over to the power switch.
+   */
+  CONFIG_REQUEST_WAIT_MS: 300_000,
 } as const;

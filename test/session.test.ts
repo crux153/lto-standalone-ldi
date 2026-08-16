@@ -7,6 +7,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 
+import { Timing } from '../src/constants.js';
 import { ACK_RESPONSE, encodePacket, NAK_RESPONSE, SNAK_RESPONSE } from '../src/packet.js';
 import { buildConfigRequest } from '../src/messages/config-request.js';
 import { buildSetConfigResponse, parseSetConfig } from '../src/messages/set-config.js';
@@ -407,6 +408,49 @@ describe('drive-initiated handshake', () => {
       const pending = session.waitForConfigRequest(10_000);
       const failure = expect(pending).rejects.toThrow(/no Config_Request received within 10000 ms/);
       await vi.advanceTimersByTimeAsync(10_000);
+      await failure;
+      session.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits five minutes by default, long enough to cover the drive POST', async () => {
+    // The spec's ten-second window starts when the drive powers up; the listener
+    // is already running by then, so the wait has to absorb the self test too.
+    vi.useFakeTimers();
+    try {
+      const stream = new FakeStream();
+      const session = new LdiSession(stream);
+      const msgId = Uint8Array.from([0x01, 0x00, 0x00, 0x09]);
+
+      const pending = session.waitForConfigRequest();
+
+      // A drive that takes over a minute to finish POST is still heard.
+      await vi.advanceTimersByTimeAsync(Timing.CONFIG_REQUEST_WINDOW_MS * 12);
+      stream.receive(encodePacket(buildConfigRequest(msgId)));
+
+      const request = await pending;
+      expect([...request.msgId]).toEqual([...msgId]);
+      session.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('eventually gives up on the default wait', async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = new FakeStream();
+      const session = new LdiSession(stream);
+
+      const pending = session.waitForConfigRequest();
+      const failure = expect(pending).rejects.toThrow(
+        new RegExp(`within ${Timing.CONFIG_REQUEST_WAIT_MS} ms`),
+      );
+
+      await vi.advanceTimersByTimeAsync(Timing.CONFIG_REQUEST_WAIT_MS - 1);
+      await vi.advanceTimersByTimeAsync(1);
       await failure;
       session.close();
     } finally {

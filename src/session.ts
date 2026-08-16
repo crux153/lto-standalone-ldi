@@ -291,12 +291,14 @@ export class LdiSession extends EventEmitter<LdiSessionEvents> {
    * Waits for the drive to send its Config_Request.
    *
    * A drive whose feature switches select non-polled mode sends this within ten
-   * seconds of power-up or reset.
+   * seconds of powering up. The default wait is far longer than that, because
+   * it has to cover the drive's power-on self test as well: you start listening
+   * first and switch the drive on afterwards, so POST lands inside the wait.
    *
    * @throws {LdiTimeoutError} If no Config_Request arrives in time.
    */
   async waitForConfigRequest(
-    timeoutMs: number = Timing.CONFIG_REQUEST_WINDOW_MS,
+    timeoutMs: number = Timing.CONFIG_REQUEST_WAIT_MS,
   ): Promise<ConfigRequest> {
     return this.waitForEvent('config-request', timeoutMs, 'Config_Request');
   }
