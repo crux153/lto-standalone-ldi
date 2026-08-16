@@ -41,19 +41,17 @@ export interface DriveType {
    * Byte 4.
    *
    * The specification, written in 2002 when Ultrium 1 was the only generation,
-   * fixes this at 0x80. Drives of later generations put the LTO generation here
-   * as an ASCII digit instead, so an LTO-7 drive sends 0x37 ('7') and the tail
-   * of the response reads as ASCII: "IBM" "7" "M571". Treat an unexpected value
-   * as informational, not as a failed identification.
+   * fixes this at 0x80. Drives in the field do not all agree: an LTO-8
+   * half-height drive running firmware M571 sends 0x37, which is ASCII '7'.
+   *
+   * What the byte actually encodes on later drives is not established here, and
+   * the obvious guess does not survive contact with the evidence - if it were
+   * the LTO generation as an ASCII digit, that drive would send 0x38. Only the
+   * raw value is reported; identification does not depend on it.
    */
   deviceByte: number;
   /** Human-readable reading of {@link deviceByte}. */
   deviceByteDescription: string;
-  /**
-   * LTO generation, when byte 4 carries one as an ASCII digit. Undefined for
-   * the 0x80 of the original specification and for values that are neither.
-   */
-  ltoGeneration?: number;
   /** Bytes 5..8, the firmware revision, most significant byte first. */
   firmwareRevision: Buffer;
   /**
@@ -66,26 +64,25 @@ export interface DriveType {
   /**
    * True when byte 0 is 0xFA and bytes 1..3 spell "IBM".
    *
-   * Byte 4 deliberately plays no part: it identifies the generation on modern
-   * drives, so requiring the specification's 0x80 would reject every drive
-   * newer than Ultrium 1.
+   * Byte 4 deliberately plays no part. Requiring the specification's 0x80 would
+   * reject drives that are plainly IBM drives and that answer correctly on
+   * every other byte, and no reading of that byte holds across the generations.
    */
   isIbmDrive: boolean;
   /** The nine bytes as received. */
   raw: Buffer;
 }
 
-/** Reads byte 4, which changed meaning after the specification was written. */
-function describeDeviceByte(deviceByte: number): { description: string; ltoGeneration?: number } {
+/** Describes byte 4 without claiming to know what later drives encode in it. */
+function describeDeviceByte(deviceByte: number): string {
   if (deviceByte === DRIVE_TYPE_DEVICE_BYTE) {
-    return { description: 'IBM LTO tape drive (the fixed value the 2002 specification gives)' };
+    return 'the fixed value the 2002 specification gives';
   }
-  // ASCII '1'..'9': the drive reports its LTO generation here.
-  if (deviceByte >= 0x31 && deviceByte <= 0x39) {
-    const ltoGeneration = deviceByte - 0x30;
-    return { description: `LTO generation ${ltoGeneration} (ASCII '${ltoGeneration}')`, ltoGeneration };
-  }
-  return { description: 'unrecognised' };
+  // Printable values are shown as characters because that is a fact about the
+  // byte, not an interpretation of it.
+  const isPrintable = deviceByte >= 0x20 && deviceByte <= 0x7e;
+  const prefix = isPrintable ? `ASCII '${String.fromCharCode(deviceByte)}', ` : '';
+  return `${prefix}not the 0x80 of the 2002 specification`;
 }
 
 /**
@@ -111,22 +108,18 @@ export function parseDriveType(data: Uint8Array): DriveType {
   const firmwareRevision = Buffer.from(raw.subarray(5, 9));
 
   const isPrintable = [...firmwareRevision].every((byte) => byte >= 0x20 && byte <= 0x7e);
-  const { description, ltoGeneration } = describeDeviceByte(deviceByte);
 
   const result: DriveType = {
     header,
     vendor,
     deviceByte,
-    deviceByteDescription: description,
+    deviceByteDescription: describeDeviceByte(deviceByte),
     firmwareRevision,
     firmwareRevisionValue: firmwareRevision.readUInt32BE(0),
     isIbmDrive: header === DRIVE_TYPE_HEADER_BYTE && vendor === DRIVE_TYPE_VENDOR_ID,
     raw,
   };
 
-  if (ltoGeneration !== undefined) {
-    result.ltoGeneration = ltoGeneration;
-  }
   if (isPrintable) {
     result.firmwareRevisionAscii = firmwareRevision.toString('latin1');
   }
@@ -174,17 +167,12 @@ export function formatDriveType(driveType: DriveType): string {
   ];
 
   if (driveType.isIbmDrive) {
-    lines.push(
-      `  Verdict            : OK - drive identifies itself as IBM` +
-        (driveType.ltoGeneration !== undefined ? `, LTO-${driveType.ltoGeneration}` : ''),
-    );
-    if (driveType.deviceByte === DRIVE_TYPE_DEVICE_BYTE || driveType.ltoGeneration !== undefined) {
-      // Byte 4 is accounted for; nothing more to say.
-    } else {
+    lines.push('  Verdict            : OK - drive identifies itself as IBM');
+    if (driveType.deviceByte !== DRIVE_TYPE_DEVICE_BYTE) {
       lines.push(
-        `                       Byte 4 is neither 0x${hex(DRIVE_TYPE_DEVICE_BYTE)} nor an ASCII`,
-        '                       generation digit, which is unusual but does not affect',
-        '                       the identification.',
+        `                       Byte 4 is not the 0x${hex(DRIVE_TYPE_DEVICE_BYTE)} the 2002 specification`,
+        '                       gives. Drives newer than Ultrium 1 vary here; it does not',
+        '                       affect the identification.',
       );
     }
   } else {

@@ -266,22 +266,26 @@ checksum, acknowledgement or byte stuffing. The drive replies with nine bytes:
 | ------- | ----- |
 | 0       | `0xFA` |
 | 1–3     | `0x49 0x42 0x4D` — ASCII `IBM` |
-| 4       | `0x80` per the spec; the LTO generation as an ASCII digit on later drives |
+| 4       | `0x80` per the spec; later drives vary |
 | 5–8     | Firmware revision, MSB first |
 
 Byte 4 is worth a note. The spec was written in 2002, when Ultrium 1 was the
-only generation, and fixes it at `0x80`. Drives since then report their
-generation there instead, so an LTO-7 half-height drive answers:
+only generation, and fixes it at `0x80`. Real drives do not all agree — an
+LTO-8 half-height drive running firmware M571 answers:
 
 ```
 FA 49 42 4D 37 4D 35 37 31
-   I  B  M  7  M  5  7  1
+   I  B  M  ?  M  5  7  1
 ```
 
-`0x37` is ASCII `7`, and the tail reads as `IBM` + `7` + firmware `M571` —
-which lines up with IBM's release notes pairing M570 with LTO-7 full-height and
-M571 with LTO-7 half-height. Identification therefore rests on byte 0 and the
-vendor field alone; byte 4 is reported, not enforced.
+`0x37` is ASCII `7`, which makes it tempting to read the byte as the LTO
+generation. It is not that: the drive above is an LTO-8. Firmware M571 ships
+for both LTO-7 and LTO-8 half-height drives, so the firmware level does not
+settle it either, and one sample is not enough to say what the byte encodes.
+
+So identification rests on byte 0 and the vendor field, which is what actually
+proves you are talking to an IBM drive over working wiring. Byte 4 is reported
+verbatim, never interpreted, and never fails the check.
 
 ## Tests
 

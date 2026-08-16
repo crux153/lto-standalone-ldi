@@ -83,8 +83,9 @@ describe('parseDriveType', () => {
     const driveType = parseDriveType(IBM_RESPONSE);
 
     expect(driveType.deviceByte).toBe(0x80);
-    expect(driveType.ltoGeneration).toBeUndefined();
-    expect(driveType.deviceByteDescription).toContain('2002 specification');
+    expect(driveType.deviceByteDescription).toBe(
+      'the fixed value the 2002 specification gives',
+    );
   });
 
   it('requires exactly nine bytes', () => {
@@ -95,17 +96,19 @@ describe('parseDriveType', () => {
   });
 });
 
-describe('real hardware capture: IBM LTO-7 half-height, firmware M571', () => {
-  // Captured from an IBM LTO-7 HH drive over a USB-to-RS-422 adapter. Byte 4 is
-  // 0x37, not the 0x80 the 2002 specification gives, because drives newer than
-  // Ultrium 1 report their generation there. Read as ASCII the tail of the
-  // response is "IBM" "7" "M571", and IBM's own release notes pair firmware
-  // M570 with LTO-7 full-height and M571 with LTO-7 half-height, so the two
-  // readings agree.
-  const LTO7_RESPONSE = Buffer.from([0xfa, 0x49, 0x42, 0x4d, 0x37, 0x4d, 0x35, 0x37, 0x31]);
+describe('real hardware capture: IBM LTO-8 half-height, firmware M571', () => {
+  // Captured from an IBM LTO-8 HH drive over a USB-to-RS-422 adapter. Byte 4 is
+  // 0x37 rather than the 0x80 the 2002 specification gives.
+  //
+  // 0x37 is ASCII '7', which invites reading the byte as the LTO generation.
+  // It is not that: this drive is an LTO-8. Firmware M571 ships for both LTO-7
+  // and LTO-8 half-height drives, so the firmware level does not identify the
+  // generation either. The byte is therefore reported, never interpreted, and
+  // never allowed to fail the identification.
+  const LTO8_RESPONSE = Buffer.from([0xfa, 0x49, 0x42, 0x4d, 0x37, 0x4d, 0x35, 0x37, 0x31]);
 
   it('identifies the drive as IBM', () => {
-    const driveType = parseDriveType(LTO7_RESPONSE);
+    const driveType = parseDriveType(LTO8_RESPONSE);
 
     expect(driveType.header).toBe(0xfa);
     expect(driveType.vendor).toBe('IBM');
@@ -113,47 +116,34 @@ describe('real hardware capture: IBM LTO-7 half-height, firmware M571', () => {
     expect(describeDriveTypeMismatches(driveType)).toEqual([]);
   });
 
-  it('decodes byte 4 as the LTO generation', () => {
-    const driveType = parseDriveType(LTO7_RESPONSE);
+  it('reports byte 4 without claiming to know what it means', () => {
+    const driveType = parseDriveType(LTO8_RESPONSE);
 
     expect(driveType.deviceByte).toBe(0x37);
-    expect(driveType.ltoGeneration).toBe(7);
-    expect(driveType.deviceByteDescription).toBe("LTO generation 7 (ASCII '7')");
+    expect(driveType.deviceByteDescription).toBe(
+      "ASCII '7', not the 0x80 of the 2002 specification",
+    );
+    // Nothing in the description claims a generation.
+    expect(driveType.deviceByteDescription).not.toMatch(/generation|LTO-\d/);
   });
 
   it('reads the firmware revision as M571', () => {
-    expect(parseDriveType(LTO7_RESPONSE).firmwareRevisionAscii).toBe('M571');
-  });
-
-  it('reports the whole tail as readable ASCII', () => {
-    expect(LTO7_RESPONSE.subarray(1).toString('ascii')).toBe('IBM7M571');
+    expect(parseDriveType(LTO8_RESPONSE).firmwareRevisionAscii).toBe('M571');
   });
 
   it('passes the verdict instead of failing on byte 4', () => {
-    const report = formatDriveType(parseDriveType(LTO7_RESPONSE));
+    const report = formatDriveType(parseDriveType(LTO8_RESPONSE));
 
-    expect(report).toContain('OK - drive identifies itself as IBM, LTO-7');
+    expect(report).toContain('OK - drive identifies itself as IBM');
     expect(report).not.toContain('MISMATCH');
-    expect(report).toContain("0x37 - LTO generation 7 (ASCII '7')");
+    expect(report).toContain('Drives newer than Ultrium 1 vary here');
   });
 
-  it('accepts every LTO generation digit', () => {
-    for (let generation = 1; generation <= 9; generation++) {
-      const response = Buffer.from([0xfa, 0x49, 0x42, 0x4d, 0x30 + generation, 0, 0, 0, 0]);
-      const driveType = parseDriveType(response);
-      expect(driveType.isIbmDrive).toBe(true);
-      expect(driveType.ltoGeneration).toBe(generation);
+  it('identifies an IBM drive whatever byte 4 holds', () => {
+    for (const deviceByte of [0x00, 0x37, 0x38, 0x80, 0xaa, 0xff]) {
+      const response = Buffer.from([0xfa, 0x49, 0x42, 0x4d, deviceByte, 0, 0, 0, 0]);
+      expect(parseDriveType(response).isIbmDrive).toBe(true);
     }
-  });
-
-  it('still identifies an IBM drive when byte 4 is neither form', () => {
-    const odd = Buffer.from([0xfa, 0x49, 0x42, 0x4d, 0xaa, 0, 0, 0, 0]);
-    const driveType = parseDriveType(odd);
-
-    expect(driveType.isIbmDrive).toBe(true);
-    expect(driveType.ltoGeneration).toBeUndefined();
-    expect(driveType.deviceByteDescription).toBe('unrecognised');
-    expect(formatDriveType(driveType)).toContain('does not affect');
   });
 });
 

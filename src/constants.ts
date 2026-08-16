@@ -128,10 +128,15 @@ export const DRIVE_TYPE_VENDOR_ID = 'IBM';
  * Byte 4 of a Drive Type response as the specification defines it.
  *
  * The document dates from 2002, when Ultrium 1 was the only generation, and
- * fixes this byte at 0x80. Later drives report their LTO generation here as an
- * ASCII digit instead: an LTO-7 half-height drive running firmware M571 answers
- * `FA 49 42 4D 37 4D 35 37 31`, whose tail reads as ASCII "IBM" "7" "M571".
- * Identification therefore rests on byte 0 and the vendor field alone.
+ * fixes this byte at 0x80. Drives in the field do not all agree: an LTO-8
+ * half-height drive running firmware M571 answers
+ * `FA 49 42 4D 37 4D 35 37 31`, putting 0x37 here.
+ *
+ * What later drives encode in this byte is unknown. It is tempting to read 0x37
+ * as ASCII '7' and call it the LTO generation, but that drive is an LTO-8, and
+ * firmware M571 ships for both LTO-7 and LTO-8 half-height drives, so the
+ * firmware level does not settle it either. Identification therefore rests on
+ * byte 0 and the vendor field alone, and this byte is reported unmodified.
  */
 export const DRIVE_TYPE_DEVICE_BYTE = 0x80;
 
